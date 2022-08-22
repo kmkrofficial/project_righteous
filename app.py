@@ -17,7 +17,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 api = Api(app)
 # database
 app.config["SECRET_KEY"] = '9bbd8f44c4ec734042fd241973766449'
-app.config["SQLALCHEMY_DATABASE_URI"] = 'sqlite:///App.db'
+app.config["SQLALCHEMY_DATABASE_URI"] = 'sqlite:///app.db'
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = True
 app.config['UPLOAD_FOLDER'] = "files/"
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
@@ -35,9 +35,9 @@ class Courthouse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     court_type = db.Column(db.String, nullable=False)
     court_location = db.Column(db.String, nullable=False)
-    users = db.relationship('User', backref='Courthouse')
+    users = db.relationship('user', backref='courthouse')
     number_of_cases_per_day = db.Column(db.Integer, nullable=False, default=5)
-    fixed_case_dates = db.relationship('FixedCaseDate', backref='Courthouse')
+    fixed_case_dates = db.relationship('fixed_case_date', backref='courthouse')
 
     def __repr__(self):
         return self.id
@@ -45,7 +45,7 @@ class Courthouse(db.Model):
 
 class CourthouseSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'courttype', 'courtLocation')
+        fields = ('id', 'court_type', 'court_location')
 
 
 # init schema
@@ -75,10 +75,10 @@ class User(db.Model):
     full_name = db.Column(db.String, nullable=False)
     city_of_origin = db.Column(db.String, nullable=False)
     court_house = db.Column(db.Integer, db.ForeignKey(
-        'Courthouse.id'), nullable=False)
+        'courthouse.id'), nullable=False)
     role = db.Column(db.String, nullable=False)
-    cases = db.relationship('Case', backref='User')
-    fixed_case_dates = db.relationship('FixedCaseDate', backref='User')
+    cases = db.relationship('case', backref='user')
+    fixed_case_dates = db.relationship('fixed_case_date', backref='user')
 
     def __repr__(self):
         return str(self.id)
@@ -152,8 +152,8 @@ class GenericUserController(Resource):
 class RequestHandler(db.Model):
     __tablename__ = 'request'
     id = db.Column(db.Integer, primary_key=True)
-    from_user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
-    to_user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
+    from_user = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    to_user = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     request_type = db.Column(db.String, nullable=False)
     request_data = db.Column(db.String, nullable=False)
     status = db.Column(db.String, nullable=False)
@@ -166,8 +166,8 @@ class RequestHandler(db.Model):
 
 class RequestHandlerSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'fromuser', 'touser', 'requesttype',
-                  'requestdata', 'status', 'createdon')
+        fields = ('id', 'from_user', 'to_user', 'request_type',
+                  'request_data', 'status', 'created_on')
 
 
 # init schema
@@ -226,8 +226,8 @@ class Case(db.Model):
     case_status = db.Column(db.String, nullable=False, default="Not yet assigned")
     severity_index = db.Column(db.String, nullable=False, default="0.1")
     assigned_by = db.Column(
-        db.Integer, db.ForeignKey('User.id'), nullable=False)
-    fixed_case_date = db.relationship("FixedCaseDate", backref="Case")
+        db.Integer, db.ForeignKey('user.id'), nullable=False)
+    fixed_case_date = db.relationship("fixed_case_date", backref="case")
 
     def __repr__(self):
         return self.id
@@ -236,8 +236,8 @@ class Case(db.Model):
 # case schema
 class CaseSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'name', 'assignedAdvocate', 'affidavit', 'chargeSheet',
-                  'caseCreatedTime', 'lastModified', 'caseStatus', 'severityIndex', 'assignedBy')
+        fields = ('id', 'name', 'assigned_advocate', 'affidavit', 'charge_sheet',
+                  'case_created_time', 'last_modified', 'case_status', 'severity_index', 'assigned_by')
 
 
 # init schema
@@ -286,7 +286,7 @@ class GenericCaseController(Resource):
         case = Case.query.filter_by(id=caseno).all()
         case.name = request.form.get('name')
         case.assignedAdvocate = request.form.get('assignedAdvocate')
-        case.affidivit = request.form.get('affidivi')
+        case.affidivit = request.form.get('affidivit')
         case.chargesheet = request.form.get('chargesheet')
         case.casestatus = request.form.get('casestatus')
         case.sevirity = request.form.get('sevirity')
@@ -298,10 +298,11 @@ class GenericCaseController(Resource):
 class FixedCaseDate(db.Model):
     __tablename__ = 'fixed_case_date'
     id = db.Column(db.Integer, primary_key=True)
-    case = db.Column(db.Integer, db.ForeignKey("Case.id"), nullable=False)
+    case = db.Column(db.Integer, db.ForeignKey("case.id"), nullable=False)
     date = db.Column(db.Date, nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
-    courthouse = db.Column(db.Integer, db.ForeignKey("Courthouse.id"), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_on = db.Column(db.String, default=getDateTimeInMillis(), nullable=False)
+    courthouse = db.Column(db.Integer, db.ForeignKey("courthouse.id"), nullable=False)
     type = db.Column(db.String, nullable=False)
 
     def __repr__(self):
@@ -310,7 +311,7 @@ class FixedCaseDate(db.Model):
 
 class FixedCaseSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'case', 'date', 'createdby', 'type')
+        fields = ('id', 'case', 'date', 'created_by', 'created_on', 'type')
 
 
 # init schema
@@ -356,9 +357,9 @@ class GenericFixedDateController(Resource):
 class JudgeCasePreference(db.Model):
     __tablename__ = 'judge_case_preference'
     id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
+    user = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     section = db.Column(db.String, nullable=False)
-    preferenceOrder = db.Column(db.Integer, nullable=False)
+    preference_order = db.Column(db.Integer, nullable=False)
 
     def __repr__(self):
         return self.user + self.preferenceOrder
@@ -366,7 +367,7 @@ class JudgeCasePreference(db.Model):
 
 class JudgeCasePreferenceSchema(ma.Schema):
     class Meta:
-        fields = ('id', 'user', 'section', 'preferenceoder')
+        fields = ('id', 'user', 'section', 'preference_order')
 
 
 # init schema
