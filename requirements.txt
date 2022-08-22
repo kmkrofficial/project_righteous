@@ -4,3 +4,7 @@ flask_marshmallow==0.14.0
 Flask_RESTful==0.3.9
 Flask_SQLAlchemy==2.5.1
 Werkzeug==2.2.2
+
+spacy~=3.4.1
+pandas~=1.4.3
+spacytextblob~=4.0.0

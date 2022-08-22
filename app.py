@@ -351,10 +351,10 @@ class GenericFixedDateController(Resource):
         return fixed_cases_schema.jsonify(fixed_case_date)
 
     def post(self):
-        case = request.json['case']
-        date = request.json['date']
-        createdBy = request.json['createdBy']
-        type = request.json['type']
+        case = request.form.get('case')
+        date = request.form.get('date')
+        createdBy = request.form.get('createdBy')
+        type = request.form.get('type')
         fixed_date = FixedCaseDate(
             case=case, date=date, created_by=createdBy, type=type)
         db.session.add(fixed_date)
@@ -396,8 +396,7 @@ class JudgeCasePreferenceController(Resource):
                     preference.preference_order = i['preference_order']
                     break
         db.session.commit()
-        print(preferences_from_db, preferences)
-
+        return successAsJson()
 
 
 class ScheduleController(Resource):
@@ -425,19 +424,38 @@ class LoginController(Resource):
 
 class Utility:
 
-    def prep_schedule(self, courthouse_id):
+    def prep_schedule(self, courthouse_id, date):
         number_of_cases_per_day = Courthouse.query.with_entities(Courthouse.number_of_cases_per_day).filter(
-            Courthouse.id == courthouse_id).one()
-        fixed_cases = FixedCaseDate.query.filter(getTomorrowDate()).all()
-        print(fixed_cases)
-        cases = Case.query.order_by(Case.case_created_time, Case.severity_index.desc()).limit(
-            number_of_cases_per_day).all()
-        print(cases)
+            Courthouse.id == courthouse_id).one().number_of_cases_per_day
+        fixed_cases = FixedCaseDate.query.filter(FixedCaseDate.date == date).order_by(FixedCaseDate.created_on).all()
+        final_count = 0
+        final_schedule = []
+        if len(fixed_cases) >= number_of_cases_per_day:
+            for fixed_case in fixed_cases:
+                if final_count < number_of_cases_per_day:
+                    final_schedule.append(fixed_case)
+                    final_count = final_count + 1
+                else:
+                    fixed_case.date = getTomorrowDate()
+        else:
+            number_of_cases_per_day = number_of_cases_per_day - len(fixed_cases)
+            for fixed_case in fixed_cases:
+                final_schedule.append(fixed_case)
+                number_of_cases_per_day = number_of_cases_per_day-1
+            if number_of_cases_per_day > 0:
+                cases = Case.query.order_by(Case.case_created_time, Case.severity_index.desc()).limit(
+                    number_of_cases_per_day).all()
+                for case in cases:
+                    final_schedule.append(case)
+        db.session.commit()
+        print(final_schedule)
+
 
     def populate_judge_preference(self, user_obj):
-        arr = ["section 1", "section 2", "section 3", "section 4", "section 5", "section 6", "section 7", "section 8", "section 9"]
+        arr = ["section 1", "section 2", "section 3", "section 4", "section 5", "section 6", "section 7", "section 8",
+               "section 9"]
         for i in range(0, len(arr)):
-            case_pref = JudgeCasePreference(user=user_obj.id, section=arr[i], preference_order=i+1)
+            case_pref = JudgeCasePreference(user=user_obj.id, section=arr[i], preference_order=i + 1)
             db.session.add(case_pref)
         db.session.commit()
 

@@ -1,6 +1,9 @@
 from flask import jsonify
 from datetime import datetime, date, timedelta
 import time
+import spacy
+from spacytextblob.spacytextblob import SpacyTextBlob
+import pandas as pd
 
 
 def exceptionAsAJson(cause, e):
@@ -43,3 +46,15 @@ def getTomorrowDate():
 
 def checkTwoDateMatch(d1, d2):
     return d1 == d2
+
+
+def extract_text_from_pdf():
+    pass
+
+
+def sentiment_analysis(text):
+    nlp = spacy.load('en_core_web_sm')
+    nlp.add_pipe('spacytextblob')
+    doc = nlp(text)
+    sentiment = doc._.blob.polarity
+    print(sentiment)
