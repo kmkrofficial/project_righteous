@@ -3,14 +3,10 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from flask_restful import Resource, Api
 from flask_bcrypt import Bcrypt
-import datetime
-import os
-import traceback
+import os, secrets, traceback
 from werkzeug.utils import secure_filename
 
-
-
-from helpers import exceptionAsAJson, successAsJson
+from helpers import exceptionAsAJson, successAsJson, getDateTimeInTimestamp, getDateTimeInMillis
 
 # Init app
 app = Flask(__name__)
@@ -31,8 +27,7 @@ ma = Marshmallow(app)
 bcrypt = Bcrypt(app)
 
 
-def getDateTimeInMillis():
-    return datetime.datetime.now().timestamp() * 1000
+
 
 
 class Courthouse(db.Model):
@@ -270,6 +265,7 @@ class AllUserController(Resource):
 class AllCaseController(Resource):
     def get(self, caseno):
         case = Case.query.filter_by(id=caseno).all()
+
         return cases_schema.jsonify(case)
 
     def delete(self, caseno):
@@ -301,10 +297,11 @@ class CaseController(Resource):
         affidavit = request.files['affidavit']
         chargesheet = request.files["charge_sheet"]
         assignedby = request.form.get("assigned_by")
-        affidavit_rename = "{}_affidavit.pdf".format(name)
-        affidavit.save(os.path.join(app.config["UPLOAD_FOLDER"]+"/affidavit/", secure_filename(affidavit_rename)))
-        chargesheet_rename = "{}_chargesheet.pdf".format(name)
-        chargesheet.save(os.path.join(app.config["UPLOAD_FOLDER"]+"/chargesheet/", secure_filename(chargesheet_rename)))
+        affidavit_rename = "{}_{}_affidavit.pdf".format(name, secrets.token_hex(10))
+        affidavit.save(os.path.join(app.config["UPLOAD_FOLDER"] + "/affidavit/", secure_filename(affidavit_rename)))
+        chargesheet_rename = "{}_{}_chargesheet.pdf".format(name, secrets.token_hex(10))
+        chargesheet.save(
+            os.path.join(app.config["UPLOAD_FOLDER"] + "/chargesheet/", secure_filename(chargesheet_rename)))
 
         case = Case(name=name, assignedAdvocate=assignedAdvocate, affidavit=affidavit_rename,
                     chargeSheet=chargesheet_rename, assignedBy=assignedby)
@@ -409,6 +406,7 @@ class FixedDateController(Resource):
 class ScheduleController(Resource):
     def get(self):
         cases = Case.query.order_by(Case.caseCreatedTime).limit(10)
+        return cases_schema.jsonify(cases)
 
 
 api.add_resource(CourtController, '/courthouse')
@@ -421,6 +419,7 @@ api.add_resource(AllCaseController, '/case/<int:caseno>')
 api.add_resource(AllFixedDateController, '/fixedcasedate')
 api.add_resource(FixedDateController, '/fixedcasedate/<int:fixid>')
 api.add_resource(LoginController, "/login")
+api.add_resource(ScheduleController, "/schedule")
 
 # run Server
 if __name__ == '__main__':
