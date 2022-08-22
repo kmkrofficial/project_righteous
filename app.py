@@ -31,13 +31,13 @@ bcrypt = Bcrypt(app)
 
 
 class Courthouse(db.Model):
-    __tablename__ = 'courthouse'
+    __tablename__ = 'Courthouse'
     id = db.Column(db.Integer, primary_key=True)
     court_type = db.Column(db.String, nullable=False)
     court_location = db.Column(db.String, nullable=False)
-    users = db.relationship('user', backref='courthouse')
+    users = db.relationship('User', backref='Courthouse')
     number_of_cases_per_day = db.Column(db.Integer, nullable=False, default=5)
-    fixed_case_dates = db.relationship('fixed_case_date', backref='courthouse')
+    fixed_case_dates = db.relationship('FixedCaseDate', backref='Courthouse')
 
     def __repr__(self):
         return self.id
@@ -59,26 +59,26 @@ class CourthouseController(Resource):
         return courthouses_schema.jsonify(court)
 
     def post(self):
-        court_type = request.form.get('courtType')
-        court_location = request.form.get('courtLocation')
-        court = Courthouse(courtType=court_type, courtLocation=court_location)
+        court_type = request.form.get('court_type')
+        court_location = request.form.get('court_location')
+        court = Courthouse(court_type=court_type, court_location=court_location)
         db.session.add(court)
         db.session.commit()
         return courthouse_schema.jsonify(court)
 
 
 class User(db.Model):
-    __tablename__ = 'user'
+    __tablename__ = 'User'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String, nullable=False)
     password = db.Column(db.String, nullable=False)
     full_name = db.Column(db.String, nullable=False)
     city_of_origin = db.Column(db.String, nullable=False)
     court_house = db.Column(db.Integer, db.ForeignKey(
-        'courthouse.id'), nullable=False)
+        'Courthouse.id'), nullable=False)
     role = db.Column(db.String, nullable=False)
-    cases = db.relationship('case', backref='user')
-    fixed_case_dates = db.relationship('fixed_case_date', backref='user')
+    cases = db.relationship('Case', backref='User')
+    fixed_case_dates = db.relationship('FixedCaseDate', backref='User')
 
     def __repr__(self):
         return str(self.id)
@@ -106,21 +106,26 @@ class UserController(Resource):
     def post(self):
         username = request.form.get('username')
         password = request.form.get('password')
-        fullName = request.form.get('fullName')
-        cityOfOrigin = request.form.get('cityOfOrigin')
+        fullName = request.form.get('full_name')
+        cityOfOrigin = request.form.get('city_of_origin')
+        print(request.form.get('court_house'))
         try:
             courtHouse = Courthouse.query.filter(
-                Courthouse.id == request.form.get('courtHouse')).one()
-            # print(courtHouse)courtHouseser post courthouse get", e)
+                Courthouse.id == int(request.form.get('court_house'))).one()
+
         except Exception as e:
             print(e)
             return exceptionAsAJson("user post", str(e))
         role = request.form.get('role')
-        user = User(username=username, password=password, fullName=fullName,
-                    cityOfOrigin=cityOfOrigin, courtHouse=courtHouse.id, role=role)
+
+        user = User(username=username, password=password, full_name=fullName,
+                    city_of_origin=cityOfOrigin, court_house=courtHouse.id, role=role)
         db.session.add(user)
         db.session.commit()
-        return courthouse_schema.jsonify(user)
+        if role.lower() == "judge":
+            print(user)
+            Utility().populate_judge_preference(user)
+        return user_schema.jsonify(user)
 
 
 class GenericUserController(Resource):
@@ -150,10 +155,10 @@ class GenericUserController(Resource):
 
 
 class RequestHandler(db.Model):
-    __tablename__ = 'request'
+    __tablename__ = 'Request'
     id = db.Column(db.Integer, primary_key=True)
-    from_user = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    to_user = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    from_user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
+    to_user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
     request_type = db.Column(db.String, nullable=False)
     request_data = db.Column(db.String, nullable=False)
     status = db.Column(db.String, nullable=False)
@@ -186,8 +191,8 @@ class RequestController(Resource):
         requestType = request.form.get('requestType')
         requestData = request.form.get('requestData')
         status = request.form.get('status')
-        request_handler = RequestHandler(fromUser=fromUser, toUser=toUser,
-                                         requestType=requestType, requestData=requestData, status=status)
+        request_handler = RequestHandler(from_user=fromUser, to_user=toUser,
+                                         request_type=requestType, request_data=requestData, status=status)
         db.session.add(request_handler)
         db.session.commit()
 
@@ -213,7 +218,7 @@ class GenericRequestController(Resource):
 
 
 class Case(db.Model):
-    __tablename__ = 'case'
+    __tablename__ = 'Case'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
     assigned_advocate = db.Column(db.String, nullable=False)
@@ -227,8 +232,8 @@ class Case(db.Model):
     case_status = db.Column(db.String, nullable=False, default="Not yet assigned")
     severity_index = db.Column(db.String, nullable=False, default="0.1")
     assigned_by = db.Column(
-        db.Integer, db.ForeignKey('user.id'), nullable=False)
-    fixed_case_date = db.relationship("fixed_case_date", backref="case")
+        db.Integer, db.ForeignKey('User.id'), nullable=False)
+    fixed_case_date = db.relationship("FixedCaseDate", backref="Case")
 
     def __repr__(self):
         return self.id
@@ -257,14 +262,15 @@ class CaseController(Resource):
         affidavit = request.files['affidavit']
         chargesheet = request.files["charge_sheet"]
         assignedby = request.form.get("assigned_by")
+        section = request.form.get("section")
         affidavit_rename = "{}_{}_affidavit.pdf".format(name, secrets.token_hex(10))
         affidavit.save(os.path.join(app.config["UPLOAD_FOLDER"] + "/affidavit/", secure_filename(affidavit_rename)))
         chargesheet_rename = "{}_{}_chargesheet.pdf".format(name, secrets.token_hex(10))
         chargesheet.save(
             os.path.join(app.config["UPLOAD_FOLDER"] + "/chargesheet/", secure_filename(chargesheet_rename)))
 
-        case = Case(name=name, assignedAdvocate=assignedAdvocate, affidavit=affidavit_rename,
-                    chargeSheet=chargesheet_rename, assignedBy=assignedby)
+        case = Case(name=name, assigned_advocate=assignedAdvocate, affidavit=affidavit_rename,
+                    charge_sheet=chargesheet_rename, assigned_by=assignedby, section=section)
         print(name, assignedAdvocate, affidavit, chargesheet, assignedby)
         data = dict(request.form)
         print(data)
@@ -297,13 +303,13 @@ class GenericCaseController(Resource):
 
 
 class FixedCaseDate(db.Model):
-    __tablename__ = 'fixed_case_date'
+    __tablename__ = 'FixedCaseDate'
     id = db.Column(db.Integer, primary_key=True)
-    case = db.Column(db.Integer, db.ForeignKey("case.id"), nullable=False)
+    case = db.Column(db.Integer, db.ForeignKey("Case.id"), nullable=False)
     date = db.Column(db.Date, nullable=False)
-    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
     created_on = db.Column(db.String, default=getDateTimeInMillis(), nullable=False)
-    courthouse = db.Column(db.Integer, db.ForeignKey("courthouse.id"), nullable=False)
+    courthouse = db.Column(db.Integer, db.ForeignKey("Courthouse.id"), nullable=False)
     type = db.Column(db.String, nullable=False)
 
     def __repr__(self):
@@ -350,20 +356,20 @@ class GenericFixedDateController(Resource):
         createdBy = request.json['createdBy']
         type = request.json['type']
         fixed_date = FixedCaseDate(
-            case=case, date=date, createdBy=createdBy, type=type)
+            case=case, date=date, created_by=createdBy, type=type)
         db.session.add(fixed_date)
         db.session.commit()
 
 
 class JudgeCasePreference(db.Model):
-    __tablename__ = 'judge_case_preference'
+    __tablename__ = 'JudgeCasePreference'
     id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
     section = db.Column(db.String, nullable=False)
     preference_order = db.Column(db.Integer, nullable=False)
 
     def __repr__(self):
-        return self.user + self.preferenceOrder
+        return str(self.user) + " " + str(self.preference_order)
 
 
 class JudgeCasePreferenceSchema(ma.Schema):
@@ -376,14 +382,22 @@ judge_case_preference_schema = JudgeCasePreferenceSchema()
 judge_case_preferences_schema = JudgeCasePreferenceSchema(many=True)
 
 
-class ScheduleUtil:
+class JudgeCasePreferenceController(Resource):
+    def get(self, user_id):
+        preferences = JudgeCasePreference.query.filter(JudgeCasePreference.user == user_id).all()
+        return judge_case_preferences_schema.jsonify(preferences)
 
-    def prep_schedule(self, courthouse_id):
-        number_of_cases_per_day = Courthouse.query.with_entities(Courthouse.number_of_cases_per_day).filter(Courthouse.id == courthouse_id).one()
-        fixed_cases = FixedCaseDate.query.filter(getTomorrowDate()).all()
-        print(fixed_cases)
-        cases = Case.query.order_by(Case.case_created_time, Case.severity_index.desc()).limit(number_of_cases_per_day).all()
-        print(cases)
+    def put(self, user_id):
+        preferences = request.json["preferences"]
+        preferences_from_db = JudgeCasePreference.query.filter(JudgeCasePreference.user == user_id).all()
+        for preference in preferences_from_db:
+            for i in preferences:
+                if preference.id == i['id']:
+                    preference.preference_order = i['preference_order']
+                    break
+        db.session.commit()
+        print(preferences_from_db, preferences)
+
 
 
 class ScheduleController(Resource):
@@ -409,17 +423,37 @@ class LoginController(Resource):
             return exceptionAsAJson("login post", str(e))
 
 
+class Utility:
+
+    def prep_schedule(self, courthouse_id):
+        number_of_cases_per_day = Courthouse.query.with_entities(Courthouse.number_of_cases_per_day).filter(
+            Courthouse.id == courthouse_id).one()
+        fixed_cases = FixedCaseDate.query.filter(getTomorrowDate()).all()
+        print(fixed_cases)
+        cases = Case.query.order_by(Case.case_created_time, Case.severity_index.desc()).limit(
+            number_of_cases_per_day).all()
+        print(cases)
+
+    def populate_judge_preference(self, user_obj):
+        arr = ["section 1", "section 2", "section 3", "section 4", "section 5", "section 6", "section 7", "section 8", "section 9"]
+        for i in range(0, len(arr)):
+            case_pref = JudgeCasePreference(user=user_obj.id, section=arr[i], preference_order=i+1)
+            db.session.add(case_pref)
+        db.session.commit()
+
+
 api.add_resource(CourthouseController, '/courthouse')
 api.add_resource(UserController, '/user')
-api.add_resource(GenericUserController, '/user/<int:userno>')
+api.add_resource(GenericUserController, '/user/<int:user_no>')
 api.add_resource(CaseController, '/case')
-api.add_resource(GenericCaseController, '/case/<int:caseno>')
+api.add_resource(GenericCaseController, '/case/<int:case_no>')
 api.add_resource(RequestController, '/request')
-api.add_resource(GenericRequestController, '/request/<int:reqid>')
+api.add_resource(GenericRequestController, '/request/<int:req_id>')
 api.add_resource(GenericFixedDateController, '/fixedcasedate')
-api.add_resource(FixedDateController, '/fixedcasedate/<int:fixid>')
+api.add_resource(FixedDateController, '/fixedcasedate/<int:fix_id>')
 api.add_resource(LoginController, "/login")
 api.add_resource(ScheduleController, "/schedule")
+api.add_resource(JudgeCasePreferenceController, '/preference/<int:user_id>')
 
 # run Server
 if __name__ == '__main__':
