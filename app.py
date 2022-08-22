@@ -9,7 +9,7 @@ from flask_restful import Resource, Api
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
 
-from helpers import exceptionAsAJson, successAsJson, getDateTimeInMillis
+from helpers import exceptionAsAJson, successAsJson, getDateTimeInMillis, getTomorrowDate
 
 # Init app
 app = Flask(__name__)
@@ -218,6 +218,7 @@ class Case(db.Model):
     name = db.Column(db.String, nullable=False)
     assigned_advocate = db.Column(db.String, nullable=False)
     affidavit = db.Column(db.String, nullable=False)
+    section = db.Column(db.String, nullable=False)
     charge_sheet = db.Column(db.String, nullable=False)
     case_created_time = db.Column(
         db.String, default=getDateTimeInMillis(), nullable=False)
@@ -373,6 +374,16 @@ class JudgeCasePreferenceSchema(ma.Schema):
 # init schema
 judge_case_preference_schema = JudgeCasePreferenceSchema()
 judge_case_preferences_schema = JudgeCasePreferenceSchema(many=True)
+
+
+class ScheduleUtil:
+
+    def prep_schedule(self, courthouse_id):
+        number_of_cases_per_day = Courthouse.query.with_entities(Courthouse.number_of_cases_per_day).filter(Courthouse.id == courthouse_id).one()
+        fixed_cases = FixedCaseDate.query.filter(getTomorrowDate()).all()
+        print(fixed_cases)
+        cases = Case.query.order_by(Case.case_created_time, Case.severity_index.desc()).limit(number_of_cases_per_day).all()
+        print(cases)
 
 
 class ScheduleController(Resource):

@@ -1,5 +1,5 @@
 from flask import jsonify
-from datetime import datetime
+from datetime import datetime, date, timedelta
 import time
 
 
@@ -28,7 +28,18 @@ def getDateTimeInMillis():
 
 
 def getDateTimeInTimestamp(millis):
-    date_time_obj = datetime.fromtimestamp(millis/1000)
+    date_time_obj = datetime.fromtimestamp(millis / 1000)
     returnable = date_time_obj.strftime("%m/%d/%Y, %H:%M:%S")
     return returnable
 
+
+def getTodayDate():
+    return date.today()
+
+
+def getTomorrowDate():
+    return date.today() + timedelta(days=1)
+
+
+def checkTwoDateMatch(d1, d2):
+    return d1 == d2
