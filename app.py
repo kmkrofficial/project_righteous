@@ -33,10 +33,11 @@ bcrypt = Bcrypt(app)
 class Courthouse(db.Model):
     __tablename__ = 'courthouse'
     id = db.Column(db.Integer, primary_key=True)
-    courtType = db.Column(db.String, nullable=False)
-    courtLocation = db.Column(db.String, nullable=False)
+    court_type = db.Column(db.String, nullable=False)
+    court_location = db.Column(db.String, nullable=False)
     users = db.relationship('User', backref='Courthouse')
-    fixedCaseDates = db.relationship('FixedCaseDate', backref='Courthouse')
+    number_of_cases_per_day = db.Column(db.Integer, nullable=False, default=5)
+    fixed_case_dates = db.relationship('FixedCaseDate', backref='Courthouse')
 
     def __repr__(self):
         return self.id
@@ -71,13 +72,13 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String, nullable=False)
     password = db.Column(db.String, nullable=False)
-    fullName = db.Column(db.String, nullable=False)
-    cityOfOrigin = db.Column(db.String, nullable=False)
-    courtHouse = db.Column(db.Integer, db.ForeignKey(
+    full_name = db.Column(db.String, nullable=False)
+    city_of_origin = db.Column(db.String, nullable=False)
+    court_house = db.Column(db.Integer, db.ForeignKey(
         'Courthouse.id'), nullable=False)
     role = db.Column(db.String, nullable=False)
     cases = db.relationship('Case', backref='User')
-    fixedCaseDates = db.relationship('FixedCaseDate', backref='User')
+    fixed_case_dates = db.relationship('FixedCaseDate', backref='User')
 
     def __repr__(self):
         return str(self.id)
@@ -121,17 +122,6 @@ class UserController(Resource):
         db.session.commit()
         return courthouse_schema.jsonify(user)
 
-    def delete(self):
-        try:
-            users = User.query.all()
-            print(users)
-            for user in users:
-                print(user)
-                db.session.delete(user)
-            db.session.commit()
-        except Exception as e:
-            return exceptionAsAJson("user delete", e)
-
 
 class GenericUserController(Resource):
     def get(self, userid):
@@ -162,12 +152,12 @@ class GenericUserController(Resource):
 class RequestHandler(db.Model):
     __tablename__ = 'request'
     id = db.Column(db.Integer, primary_key=True)
-    fromUser = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
-    toUser = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
-    requestType = db.Column(db.String, nullable=False)
-    requestData = db.Column(db.String, nullable=False)
+    from_user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
+    to_user = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
+    request_type = db.Column(db.String, nullable=False)
+    request_data = db.Column(db.String, nullable=False)
     status = db.Column(db.String, nullable=False)
-    createdOn = db.Column(
+    created_on = db.Column(
         db.String, default=getDateTimeInMillis(), nullable=False)
 
     def __repr__(self):
@@ -181,14 +171,14 @@ class RequestHandlerSchema(ma.Schema):
 
 
 # init schema
-Request_schema = RequestHandlerSchema()
-Requests_schema = RequestHandlerSchema(many=True)
+request_schema = RequestHandlerSchema()
+requests_schema = RequestHandlerSchema(many=True)
 
 
 class RequestController(Resource):
     def get(self):
         requests = RequestHandler.query.all()
-        return Requests_schema.jsonify(requests)
+        return requests_schema.jsonify(requests)
 
     def post(self):
         fromUser = request.form.get('fromUser')
@@ -205,7 +195,7 @@ class RequestController(Resource):
 class GenericRequestController(Resource):
     def get(self, reqid):
         requests = RequestHandler.query.filter_by(id=reqid).all()
-        return Request_schema.jsonify(requests)
+        return request_schema.jsonify(requests)
 
     def delete(self, reqid):
         requests = RequestHandler.query.filter_by(id=reqid).all()
@@ -226,18 +216,18 @@ class Case(db.Model):
     __tablename__ = 'case'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, nullable=False)
-    assignedAdvocate = db.Column(db.String, nullable=False)
+    assigned_advocate = db.Column(db.String, nullable=False)
     affidavit = db.Column(db.String, nullable=False)
-    chargeSheet = db.Column(db.String, nullable=False)
-    caseCreatedTime = db.Column(
+    charge_sheet = db.Column(db.String, nullable=False)
+    case_created_time = db.Column(
         db.String, default=getDateTimeInMillis(), nullable=False)
-    lastModified = db.Column(
+    last_modified = db.Column(
         db.String, default=getDateTimeInMillis(), nullable=False)
-    caseStatus = db.Column(db.String, nullable=False, default="Not yet assigned")
-    severityIndex = db.Column(db.String, nullable=False, default="0.1")
-    assignedBy = db.Column(
+    case_status = db.Column(db.String, nullable=False, default="Not yet assigned")
+    severity_index = db.Column(db.String, nullable=False, default="0.1")
+    assigned_by = db.Column(
         db.Integer, db.ForeignKey('User.id'), nullable=False)
-    fixedCaseDate = db.relationship("FixedCaseDate", backref="Case")
+    fixed_case_date = db.relationship("FixedCaseDate", backref="Case")
 
     def __repr__(self):
         return self.id
@@ -310,7 +300,7 @@ class FixedCaseDate(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     case = db.Column(db.Integer, db.ForeignKey("Case.id"), nullable=False)
     date = db.Column(db.Date, nullable=False)
-    createdBy = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("User.id"), nullable=False)
     courthouse = db.Column(db.Integer, db.ForeignKey("Courthouse.id"), nullable=False)
     type = db.Column(db.String, nullable=False)
 
