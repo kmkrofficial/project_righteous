@@ -415,7 +415,7 @@ class GenericJudgeCasePrefrenceSchemaController(Resource):
 
 class ScheduleController(Resource):
     def get(self):
-        cases = Case.query.order_by(Case.caseCreatedTime).limit(10)
+        cases = Case.query.order_by(Case.case_created_time).limit(1)
         return cases_schema.jsonify(cases)
         
 
