@@ -2,7 +2,6 @@ from flask import jsonify
 from datetime import datetime
 import time
 
-
 def exceptionAsAJson(cause, e):
     return jsonify({
         "caused at": str(cause),

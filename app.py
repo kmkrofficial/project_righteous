@@ -8,6 +8,7 @@ from flask_marshmallow import Marshmallow
 from flask_restful import Resource, Api
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
+import zipfile
 
 from helpers import exceptionAsAJson, successAsJson, getDateTimeInMillis
 
@@ -35,9 +36,9 @@ class Courthouse(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     court_type = db.Column(db.String, nullable=False)
     court_location = db.Column(db.String, nullable=False)
-    users = db.relationship('user', backref='courthouse')
+    users = db.relationship('User', backref='Courthouse')
     number_of_cases_per_day = db.Column(db.Integer, nullable=False, default=5)
-    fixed_case_dates = db.relationship('fixed_case_date', backref='courthouse')
+    fixed_case_dates = db.relationship('FixedCaseDate', backref='Courthouse')
 
     def __repr__(self):
         return self.id
@@ -61,7 +62,7 @@ class CourthouseController(Resource):
     def post(self):
         court_type = request.form.get('courtType')
         court_location = request.form.get('courtLocation')
-        court = Courthouse(courtType=court_type, courtLocation=court_location)
+        court = Courthouse(court_type=court_type, court_location=court_location)
         db.session.add(court)
         db.session.commit()
         return courthouse_schema.jsonify(court)
@@ -77,8 +78,8 @@ class User(db.Model):
     court_house = db.Column(db.Integer, db.ForeignKey(
         'courthouse.id'), nullable=False)
     role = db.Column(db.String, nullable=False)
-    cases = db.relationship('case', backref='user')
-    fixed_case_dates = db.relationship('fixed_case_date', backref='user')
+    cases = db.relationship('Case', backref='user')
+    fixed_case_dates = db.relationship('FixedCaseDate', backref='user')
 
     def __repr__(self):
         return str(self.id)
@@ -116,8 +117,8 @@ class UserController(Resource):
             print(e)
             return exceptionAsAJson("user post", str(e))
         role = request.form.get('role')
-        user = User(username=username, password=password, fullName=fullName,
-                    cityOfOrigin=cityOfOrigin, courtHouse=courtHouse.id, role=role)
+        user = User(username=username, password=password, full_name=fullName,
+                    city_of_origin=cityOfOrigin, court_house=courtHouse.id, role=role)
         db.session.add(user)
         db.session.commit()
         return courthouse_schema.jsonify(user)
@@ -140,12 +141,12 @@ class GenericUserController(Resource):
         user = User.query.filter_by(id=userid).all()
         user.username = request.json['username']
         user.password = request.json['password']
-        user.fullName = request.json['fullName']
-        user.cityOfOrigin = request.json['cityOfOrigin']
-        user.courtHouse = request.json['courtHouse']
+        user.full_Name = request.json['fullName']
+        user.city_of_origin = request.json['cityOfOrigin']
+        user.court_House = request.json['courtHouse']
         user.role = request.json['role']
         user.cases = request.json['cases']
-        user.fixedCaseDates = request.json['fixedCaseDates']
+        user.fixed_case_dates = request.json['fixedCaseDates']
         db.session.commit()
 
 
@@ -186,8 +187,8 @@ class RequestController(Resource):
         requestType = request.form.get('requestType')
         requestData = request.form.get('requestData')
         status = request.form.get('status')
-        request_handler = RequestHandler(fromUser=fromUser, toUser=toUser,
-                                         requestType=requestType, requestData=requestData, status=status)
+        request_handler = RequestHandler(from_user=fromUser, to_user=toUser,
+                                         request_type=requestType, request_data=requestData, status=status)
         db.session.add(request_handler)
         db.session.commit()
 
@@ -204,10 +205,10 @@ class GenericRequestController(Resource):
 
     def put(self, reqid):
         requests = RequestHandler.query.filter_by(id=reqid).all()
-        requests.fromUser = request.json['fromUser']
-        requests.toUser = request.json['toUser']
-        requests.requestType = request.json['requestType']
-        requests.requestData = request.json['requestData']
+        requests.from_user = request.json['fromUser']
+        requests.to_user = request.json['toUser']
+        requests.request_type = request.json['requestType']
+        requests.request_data = request.json['requestData']
         requests.status = request.json['status']
         db.session.commit()
 
@@ -219,6 +220,7 @@ class Case(db.Model):
     assigned_advocate = db.Column(db.String, nullable=False)
     affidavit = db.Column(db.String, nullable=False)
     charge_sheet = db.Column(db.String, nullable=False)
+    casefiles = db.Column(db.String, nullable=False)
     case_created_time = db.Column(
         db.String, default=getDateTimeInMillis(), nullable=False)
     last_modified = db.Column(
@@ -227,7 +229,7 @@ class Case(db.Model):
     severity_index = db.Column(db.String, nullable=False, default="0.1")
     assigned_by = db.Column(
         db.Integer, db.ForeignKey('user.id'), nullable=False)
-    fixed_case_date = db.relationship("fixed_case_date", backref="case")
+    fixed_case_date = db.relationship("FixedCaseDate", backref="Case")
 
     def __repr__(self):
         return self.id
@@ -261,9 +263,13 @@ class CaseController(Resource):
         chargesheet_rename = "{}_{}_chargesheet.pdf".format(name, secrets.token_hex(10))
         chargesheet.save(
             os.path.join(app.config["UPLOAD_FOLDER"] + "/chargesheet/", secure_filename(chargesheet_rename)))
-
-        case = Case(name=name, assignedAdvocate=assignedAdvocate, affidavit=affidavit_rename,
-                    chargeSheet=chargesheet_rename, assignedBy=assignedby)
+        myzip_rename="{}.zip".format(name)
+        my_zip = zipfile.ZipFile(myzip_rename,'w')
+        my_zip.write("files/affidavit/{}".format(affidavit_rename))
+        my_zip.write("files/chargesheet/{}".format(chargesheet_rename))
+        my_zip.close()
+        case = Case(name=name, assigned_advocate=assignedAdvocate, affidavit=affidavit_rename,
+                    charge_sheet=chargesheet_rename,casefiles=myzip_rename,assigned_by=assignedby)
         print(name, assignedAdvocate, affidavit, chargesheet, assignedby)
         data = dict(request.form)
         print(data)
@@ -285,13 +291,13 @@ class GenericCaseController(Resource):
     def put(self, caseno):
         case = Case.query.filter_by(id=caseno).all()
         case.name = request.form.get('name')
-        case.assignedAdvocate = request.form.get('assignedAdvocate')
+        case.assigned_advocate = request.form.get('assignedAdvocate')
         case.affidivit = request.form.get('affidivit')
-        case.chargesheet = request.form.get('chargesheet')
-        case.casestatus = request.form.get('casestatus')
-        case.sevirity = request.form.get('sevirity')
-        case.assignedby = request.form.get('assignedby')
-        case.fixedCaseDates = request.form.get('fixedCaseDates')
+        case.charge_sheet = request.form.get('chargesheet')
+        case.case_status = request.form.get('casestatus')
+        case.severity_index = request.form.get('sevirity')
+        case.assigned_by = request.form.get('assignedby')
+        case.fixed_case_date = request.form.get('fixedCaseDates')
         db.session.commit()
 
 
@@ -328,7 +334,7 @@ class FixedDateController(Resource):
         fixed_case_date = FixedCaseDate.filter_by(id=fix_id).all()
         fixed_case_date.case = request.form.get('case')
         fixed_case_date.date = request.form.get('date')
-        fixed_case_date.createdBy = request.form.get('createdBy')
+        fixed_case_date.created_by = request.form.get('createdBy')
         fixed_case_date.type = request.form.get('type')
         db.session.commit()
 
@@ -349,7 +355,7 @@ class GenericFixedDateController(Resource):
         createdBy = request.json['createdBy']
         type = request.json['type']
         fixed_date = FixedCaseDate(
-            case=case, date=date, createdBy=createdBy, type=type)
+            case=case, date=date, created_by=createdBy, type=type)
         db.session.add(fixed_date)
         db.session.commit()
 
@@ -374,12 +380,44 @@ class JudgeCasePreferenceSchema(ma.Schema):
 judge_case_preference_schema = JudgeCasePreferenceSchema()
 judge_case_preferences_schema = JudgeCasePreferenceSchema(many=True)
 
+class JudgeCasePrefrenceSchemaController(Resource):
+    def get(self,jud_id):
+        Judge_Case_preference = JudgeCasePreference.filter_by(id=jud_id).all()
+        return judge_case_preference_schema.jsonify(Judge_Case_preference)
+
+    def put(self,jud_id):
+        Judge_Case_preference = JudgeCasePreference.filter_by(id=jud_id).all()
+        Judge_Case_preference.user = request.form.get('user')
+        Judge_Case_preference.section=request.form.get('section')
+        Judge_Case_preference.preference_order = request.form.get('pref_ord')
+        db.session.commit()
+
+
+    def delete(self,jud_id):
+        Judge_Case_preference = JudgeCasePreference.filter_by(id=jud_id).all()
+        db.session.delete(Judge_Case_preference)
+        db.session.commit()
+
+
+class GenericJudgeCasePrefrenceSchemaController(Resource):
+    def get(self):
+        Judge_Case_preference = JudgeCasePreference.query.all()
+        return judge_case_preference_schema.jsonify(Judge_Case_preference)
+
+    def post(self):
+        user = request.form.get('user')
+        section=request.form.get('section')
+        preference_order = request.form.get('pref_ord')
+        Judge_Case_preference = JudgeCasePreference(user=user,section=section,preference_order=preference_order)
+        db.session.add(Judge_Case_preference)
+        db.session.commit()
+        return successAsJson()
 
 class ScheduleController(Resource):
     def get(self):
         cases = Case.query.order_by(Case.caseCreatedTime).limit(10)
         return cases_schema.jsonify(cases)
-
+        
 
 class LoginController(Resource):
     def post(self):
